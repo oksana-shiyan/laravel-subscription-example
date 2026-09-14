@@ -1,0 +1,115 @@
+server {
+    listen ${NGINX_PORT};
+    set ${DOLLAR}root_path ${DOCUMENT_ROOT};
+    root ${DOLLAR}root_path;
+
+    index index.php;
+
+    client_max_body_size ${UPLOAD_MAX_FILESIZE};
+    client_header_buffer_size 4k;
+    large_client_header_buffers 8 16k;
+
+    ssi on;
+    ssi_last_modified on;
+
+    resolver 8.8.4.4 8.8.8.8;
+    keepalive_timeout   60;
+    charset off;
+    #disable_symlinks if_not_owner from=${DOLLAR}root_path;
+
+    #----------------------------------------------- GZIP ------------------------------------------------
+    gzip on;
+    gzip_disable "msie6";
+    gzip_vary on;
+    gzip_comp_level 2;
+    gzip_min_length 256;
+    gzip_buffers 16 8k;
+    gzip_http_version 1.0;
+    gzip_proxied any;
+    gzip_types text/plain text/css application/json application/javascript application/x-javascript text/xml application/xml application/xml+rss text/javascript application/vnd.ms-fontobject application/x-font-ttf font/opentype image/svg+xml image/x-icon;
+    #-------------------------------------------------------------------------------------------------------
+
+    #------------------------------------------------ LOGS -------------------------------------------------
+    error_log ${DOCUMENT_ROOT}/../storage/logs/nginx.error.log;
+    access_log ${DOCUMENT_ROOT}/../storage/logs/nginx.access.log;
+    #-------------------------------------------------------------------------------------------------------
+
+    #Forwarding IP addresses from UI
+    set_real_ip_from 172.0.0.0/8;
+    real_ip_header X-Forwarded-For;
+    real_ip_recursive on;
+
+    location / {
+        try_files ${DOLLAR}uri ${DOLLAR}uri/ /index.php${DOLLAR}is_args${DOLLAR}args;
+    }
+
+    location = /favicon.ico {
+            log_not_found off;
+            access_log off;
+    }
+
+    location ~ /\.ht {
+            deny  all;
+    }
+
+    location ~ \.php$ {
+        fastcgi_pass ${FASTCGI_HOST}:${FASTCGI_PORT};
+        fastcgi_split_path_info ^(.+\.php)(/.*)$;
+        include fastcgi_params;
+
+        fastcgi_param SCRIPT_FILENAME ${DOLLAR}realpath_root${DOLLAR}fastcgi_script_name;
+        fastcgi_param DOCUMENT_ROOT ${DOLLAR}realpath_root;
+
+        fastcgi_param PHP_VALUE "upload_max_filesize=${UPLOAD_MAX_FILESIZE} \n post_max_size=${UPLOAD_MAX_FILESIZE}";
+        fastcgi_read_timeout 600;
+        fastcgi_hide_header "X-Powered-By";
+
+        internal;
+
+		set ${DOLLAR}cors '';
+                if (${DOLLAR}http_origin ~* (${CORS_SERVER_NAME})) {
+		        set ${DOLLAR}cors 'true';
+		}
+
+		if (${DOLLAR}request_method = 'OPTIONS') {
+		    set ${DOLLAR}cors "${DOLLAR}{cors}options";
+		}
+		if (${DOLLAR}request_method = 'GET') {
+		    set ${DOLLAR}cors "${DOLLAR}{cors}get";
+		}
+		if (${DOLLAR}request_method = 'POST') {
+		    set ${DOLLAR}cors "${DOLLAR}{cors}post";
+		}
+
+		if (${DOLLAR}cors = "true") {
+		    # Catch all incase there's a request method we're not dealing with properly
+		    add_header 'Access-Control-Allow-Origin' "${DOLLAR}http_origin" always;
+		}
+
+		if (${DOLLAR}cors = "truepost") {
+		    add_header 'Access-Control-Allow-Origin' "${DOLLAR}http_origin" always;
+		    add_header 'Access-Control-Allow-Credentials' 'true' always;
+		    add_header 'Access-Control-Allow-Headers' 'DNT,X-Mx-ReqToken,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization';
+
+		}
+
+		if (${DOLLAR}cors = "trueget") {
+		    add_header 'Access-Control-Allow-Origin' "${DOLLAR}http_origin" always;
+		    add_header 'Access-Control-Allow-Credentials' 'true';
+		    add_header 'Access-Control-Allow-Headers' 'DNT,X-Mx-ReqToken,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Content-Range,Range,Authorization,X-Items-Count,X-Previous-Item,X-Next-Item,X-localization';
+			add_header 'Access-Control-Expose-Headers' 'DNT,X-Mx-ReqToken,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Content-Range,Range,Authorization,X-Items-Count,X-Previous-Item,X-Next-Item,X-localization';
+		}
+
+		if (${DOLLAR}cors = "trueoptions") {
+			add_header 'Access-Control-Allow-Origin' "${DOLLAR}http_origin" always;
+			add_header 'Access-Control-Allow-Credentials' 'true';
+			add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, PATCH, DELETE';
+			add_header 'Access-Control-Allow-Headers' 'accept,authorization,cache-control,content-type,dnt,if-modified-since,keep-alive,origin,user-agent,x-mx-reqtoken,x-requested-with,X-Items-Count,X-Previous-Item,X-Next-Item,X-localization';
+			add_header 'Access-Control-Max-Age' 1728000;
+			add_header 'Content-Type' 'text/plain charset=UTF-8';
+			add_header 'Content-Length' 0;
+			return 204;
+		}
+
+    }
+}
